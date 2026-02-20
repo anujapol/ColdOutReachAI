@@ -1,0 +1,357 @@
+{
+  "name": "ColdOutReachAI",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "ColdOutReachAI — Generate Cold Outreach Email",
+        "formDescription": "Generate a personalized cold outreach email using AI. Choose your path below.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Path",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  { "option": "Path 1 — I used ResumeTailorAI (resume is already in the system)" },
+                  { "option": "Path 2 — Standalone (I will upload my resume)" }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Reach Out Person Name",
+              "placeholder": "e.g. Todd Beaupre",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Reach Out Person Title",
+              "placeholder": "e.g. Senior Director of Product Management",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Company Name",
+              "placeholder": "e.g. Google",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Role Title",
+              "placeholder": "e.g. Principal Product Manager, Monetization",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Job Description",
+              "fieldType": "textarea",
+              "placeholder": "Paste the full job description here...",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "LinkedIn Screenshot 1 (Profile Header)",
+              "fieldType": "file",
+              "acceptFileTypes": ".png,.jpg,.jpeg",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "LinkedIn Screenshot 2 (Experience — optional)",
+              "fieldType": "file",
+              "acceptFileTypes": ".png,.jpg,.jpeg",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Resume (Path 2 only — PDF or Word)",
+              "fieldType": "file",
+              "acceptFileTypes": ".pdf,.docx",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Claude Model",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  { "option": "claude-sonnet-4-6" },
+                  { "option": "claude-opus-4-6" },
+                  { "option": "claude-haiku-4-5-20251001" }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "node-form-trigger",
+      "name": "ColdOutReach Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "path",
+              "value": "={{ $json['Path'] }}",
+              "type": "string"
+            },
+            {
+              "name": "reach_out_person_name",
+              "value": "={{ $json['Reach Out Person Name'] }}",
+              "type": "string"
+            },
+            {
+              "name": "reach_out_person_title",
+              "value": "={{ $json['Reach Out Person Title'] }}",
+              "type": "string"
+            },
+            {
+              "name": "company",
+              "value": "={{ $json['Company Name'] }}",
+              "type": "string"
+            },
+            {
+              "name": "role_title",
+              "value": "={{ $json['Role Title'] }}",
+              "type": "string"
+            },
+            {
+              "name": "job_description",
+              "value": "={{ $json['Job Description'] }}",
+              "type": "string"
+            },
+            {
+              "name": "claude_model",
+              "value": "={{ $json['Claude Model'] }}",
+              "type": "string"
+            },
+            {
+              "name": "is_path_1",
+              "value": "={{ $json['Path'].includes('Path 1') }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-prepare-fields",
+      "name": "Prepare Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://YOUR_N8N_SUBDOMAIN.app.n8n.cloud/api/v1/data-tables/YOUR_DATA_TABLE_NANOID/rows",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "node-read-config",
+      "name": "Read Config (Path 1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [680, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "n8n API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten config rows into key-value object\nconst rows = $input.first().json.data || $input.all().map(i => i.json);\nconst config = {};\nrows.forEach(row => {\n  if (row.key && row.value) {\n    config[row.key] = row.value;\n  }\n});\nconst preparedFields = $('Prepare Fields').first().json;\nreturn [{ json: { ...preparedFields, config } }];"
+      },
+      "id": "node-flatten-config",
+      "name": "Flatten Config (Path 1)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Path 2: pass prepared fields through without config lookup\nconst preparedFields = $('Prepare Fields').first().json;\nreturn [{ json: { ...preparedFields, config: { resume_primary: '' } } }];"
+      },
+      "id": "node-path2-passthrough",
+      "name": "Prepare Path 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.is_path_1 }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "node-path-switch",
+      "name": "Path Switch",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "node-merge",
+      "name": "Merge Paths",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Prepare Fields').item.json.claude_model }}"
+        },
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "=Generate a cold outreach email with the following details:\n\nREACH OUT PERSON NAME: {{ $json.reach_out_person_name }}\nREACH OUT PERSON TITLE: {{ $json.reach_out_person_title }}\nCOMPANY: {{ $json.company }}\nROLE TITLE: {{ $json.role_title }}\n\nJOB DESCRIPTION:\n{{ $json.job_description }}\n\nCANDIDATE RESUME:\n{{ $json.config.resume_primary }}\n\nLinkedIn profile screenshots have been provided as images. Analyze the person's background, tenure, shared connections, and specialties to personalize the outreach.\n\nGenerate the complete cold outreach email following your system prompt instructions exactly. Return ONLY the email content — subject line first, then body. No explanations, no preamble."
+            }
+          ]
+        },
+        "simplifyOutput": false,
+        "options": {
+          "system": "={{ $json.config.outreach_system_prompt || 'You are an assistant that generates short, targeted, and compelling cold outreach emails to hiring managers and decision-makers for senior Product Management roles.' }}",
+          "maxTokens": 2048
+        }
+      },
+      "id": "node-generate-email",
+      "name": "Generate Outreach Email",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [1340, 300],
+      "credentials": {
+        "anthropicApi": {
+          "name": "YOUR_ANTHROPIC_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract generated email text from Claude response\nconst content = $input.first().json.content;\nlet emailText = '';\nif (Array.isArray(content)) {\n  emailText = content.filter(c => c.type === 'text').map(c => c.text).join('');\n} else {\n  emailText = String(content);\n}\n\n// Split subject from body\nconst lines = emailText.trim().split('\\n');\nlet subject = '';\nlet body = emailText;\n\nconst subjectLine = lines.find(l => l.toLowerCase().startsWith('subject:'));\nif (subjectLine) {\n  subject = subjectLine.replace(/^subject:/i, '').trim();\n  body = lines.filter(l => !l.toLowerCase().startsWith('subject:')).join('\\n').trim();\n}\n\nreturn [{ json: { email_subject: subject, email_body: body, full_email: emailText } }];"
+      },
+      "id": "node-extract-email",
+      "name": "Extract Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=Your cold outreach email has been generated!\n\n---\n\nSUBJECT: {{ $json.email_subject }}\n\n{{ $json.email_body }}\n\n---\n\nWhen you are ready to create a Gmail draft, click the button below.\n\n[CREATE GMAIL DRAFT](https://YOUR_N8N_SUBDOMAIN.app.n8n.cloud/webhook/YOUR_GMAIL_WEBHOOK_ID?subject={{ $json.email_subject }}&body={{ $json.email_body }})"
+      },
+      "id": "node-form-response",
+      "name": "Show Email",
+      "type": "n8n-nodes-base.formCompletion",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "YOUR_GMAIL_WEBHOOK_ID",
+        "options": {}
+      },
+      "id": "node-gmail-trigger",
+      "name": "Gmail Draft Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 600],
+      "webhookId": "YOUR_GMAIL_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "subject": "={{ $json.query.subject }}",
+        "message": "={{ $json.query.body }}",
+        "options": {
+          "sendTo": ""
+        }
+      },
+      "id": "node-gmail-draft",
+      "name": "Create Gmail Draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [460, 600],
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "YOUR_GMAIL_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Gmail draft created successfully. Open Gmail to review and send."
+      },
+      "id": "node-gmail-response",
+      "name": "Gmail Draft Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 600]
+    }
+  ],
+  "connections": {
+    "ColdOutReach Form": {
+      "main": [[{ "node": "Prepare Fields", "type": "main", "index": 0 }]]
+    },
+    "Prepare Fields": {
+      "main": [[{ "node": "Path Switch", "type": "main", "index": 0 }]]
+    },
+    "Path Switch": {
+      "main": [
+        [{ "node": "Read Config (Path 1)", "type": "main", "index": 0 }],
+        [{ "node": "Prepare Path 2", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Config (Path 1)": {
+      "main": [[{ "node": "Flatten Config (Path 1)", "type": "main", "index": 0 }]]
+    },
+    "Flatten Config (Path 1)": {
+      "main": [[{ "node": "Merge Paths", "type": "main", "index": 0 }]]
+    },
+    "Prepare Path 2": {
+      "main": [[{ "node": "Merge Paths", "type": "main", "index": 1 }]]
+    },
+    "Merge Paths": {
+      "main": [[{ "node": "Generate Outreach Email", "type": "main", "index": 0 }]]
+    },
+    "Generate Outreach Email": {
+      "main": [[{ "node": "Extract Email", "type": "main", "index": 0 }]]
+    },
+    "Extract Email": {
+      "main": [[{ "node": "Show Email", "type": "main", "index": 0 }]]
+    },
+    "Gmail Draft Trigger": {
+      "main": [[{ "node": "Create Gmail Draft", "type": "main", "index": 0 }]]
+    },
+    "Create Gmail Draft": {
+      "main": [[{ "node": "Gmail Draft Response", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "coldoutreachai-v1"
+  }
+}
